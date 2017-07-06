@@ -51,11 +51,14 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Library1.fs" />
-    <None Include="Script.fsx" />
     <Content Include="packages.config" />
+    <Compile Include="KphpLib.fs" />
+    <Compile Include="Interpreter.fs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Devsense.PHP.Parser">
+      <HintPath>..\packages\Devsense.Php.Parser.1.2.14\lib\net45\Devsense.PHP.Parser.dll</HintPath>
+    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <Name>FSharp.Core</Name>
