@@ -16,7 +16,6 @@ type Key =
     | StringKey of string
     | UndefKey // TODO: use option instead?
 
-    //fghjkl
 (* HashTables *)
 
 type KvPair = Key * MemLoc // TODO: generalise?
