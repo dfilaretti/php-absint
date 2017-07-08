@@ -267,6 +267,9 @@ module Memory =
                 else
                     SpecialLoc LocNull
             | SpecialLoc LocNull -> SpecialLoc LocNull
+    
+    /// bodge?
+    let rGet = rGetRef
 
     let rec lGetRef heap ref rtype = 
         
@@ -309,6 +312,9 @@ module Memory =
                         printfn "Cannot use scalar value as an array in on line"
                         (heap, SpecialLoc LocNull)
              | SpecialLoc LocNull -> (heap, SpecialLoc LocNull)
+    
+    let lGet heap ref = 
+        lGetRef heap ref ScalarRef
 
 module PrettyPrint = 
     let prettyPrintKv' fKey fVal f kv = 

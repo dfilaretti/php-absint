@@ -64,6 +64,22 @@ module Execution =
         | Atom _ -> true
         | _ -> false
 
+    let isConvertibleToLoc t = 
+        match t with 
+        | Atom.Reference _ -> true
+        // todo: LiteralValue | ThisTag 
+        | _ -> false
+
+    type ConversionToLocMode = Lhs | Rhs
+
+    let convertToLoc mode heap atom =
+        match atom with 
+        | Reference r -> 
+            match mode with 
+            | Lhs -> Memory.lGet heap r
+            | Rhs -> heap, Memory.rGet heap r
+        | _ -> failwith "ERROR: convertToLoc called with wrong params." 
+
     /// Transforms a PhpValue into a Key.    
     let value2Key v=
         // TODO: convert "numeric strings" into numbers, etc. (see KPHP)
@@ -129,6 +145,10 @@ module Execution =
             
             | _ -> Failure (state, "Kontinuation not supported: " + state.kont.ToString())
         | _ -> Failure (state, "Attempt to apply a Kontinuation, but PgmFragment does not contain a Value")            
+
+    
+
+      
 
     let step state = 
         match state.pgmFragment with 
@@ -227,27 +247,29 @@ module Execution =
 
             // assign-LHS2Loc
             | Assign (Atom (Reference rl), r) when isKResult r -> 
-                // TODO: use ConvertToLoc
-                let (h', loc) = Memory.lGetRef state.heap rl ScalarRef
+                let (h', loc) = convertToLoc Lhs state.heap (Reference rl)
                 let l' = Atom (Location loc)
                 let cmd' = InternalCmd (Assign (l', r))
                 { state with 
                     pgmFragment = cmd' 
                     heap = h' }
                 |> Success
-            
+
             // assign-RHS2Loc-NonLiteral
-            | Assign(l, Atom (Reference r)) when isKResult l ->
-                let rhs = Atom (Location (Memory.rGetRef state.heap r))
+            | Assign(l, Atom r) when isKResult l && isConvertibleToLoc r ->
+                let h', loc = convertToLoc Rhs state.heap r 
+                let rhs = Atom (Location loc)
                 let cmd' = InternalCmd (Assign (l, rhs))
                 { state with 
+                    heap = h' 
                     pgmFragment = cmd' } 
                 |> Success
-            
+           
             // assign-RHS2LangValue-overflow (TODO)
 
             // assign-RHS2LangValue-no-overflow
             | Assign(Atom (Location l), Atom (Location (MemLoc n))) -> 
+                // TODO: use convertToLanguageValue instead of Memory.memRead
                 let v = Atom (PhpValue (Memory.memRead state.heap n))
                 let cmd' = InternalCmd (Assign(Atom (Location l), v))
                 { state with 
@@ -298,11 +320,19 @@ module Execution =
             // TODO: decide whether to reimplement ConvertibleToLanguageValue etc. here or not
             
             // array-access-LHS2LangValue [ simplified ]
-            | ItemUse (l, Atom (Reference r)) ->
-                let rhsLoc =  Atom (Location (Memory.rGetRef state.heap r))
+            //| ItemUse (l, Atom (Reference r)) ->
+            //    let rhsLoc =  Atom (Location (Memory.rGetRef state.heap r))
+            //    { state with 
+            //        pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
+            //    |> Success
+            | ItemUse (l, Atom r) when isConvertibleToLoc r ->
+                let h', loc = convertToLoc Rhs state.heap r
+                let rhsLoc =  Atom (Location loc)
                 { state with 
+                    heap = h'
                     pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
                 |> Success
+
             | ItemUse (l, Atom (Location (MemLoc n))) ->
                 let v = Atom (PhpValue (Memory.memRead state.heap n))
                 { state with 
