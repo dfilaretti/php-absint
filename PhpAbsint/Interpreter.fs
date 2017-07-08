@@ -35,7 +35,7 @@ type State =
       heap : Heap
       kont : Kont }
 
-// TODO: move somewhere else?
+// TODO: use F# 4.1 builtins! 
 type Result<'TSuccess, 'TFailure> = 
     | Success of 'TSuccess
     | Failure of 'TFailure * string
@@ -58,6 +58,7 @@ module Parsing =
 
 [<RequireQualifiedAccess>]
 module Execution = 
+
     let isKResult p = 
         match p with 
         | Atom _ -> true
@@ -73,10 +74,10 @@ module Execution =
         | _ -> failwith "TODO"
 
     let h0, initialScope = Heap.freshLoc Heap.emptyHeap
+
     let initialHeap =
         Heap.storeZvalInLoc initialScope Zval.emptyArrayZval h0
 
-    // let applyKont k value s h = 
     let applyKont state =
         match state.pgmFragment with 
         | Atom value -> 
@@ -207,19 +208,26 @@ module Execution =
         // Internal commands
         | InternalCmd cmd ->
             match cmd with 
+            
+            //--- ASSIGNMENT BY VALUE
+            
+            // assign-strict-LHS
             | Assign (l,r) when not (isKResult l) ->
                 { state with 
                     pgmFragment = l
                     kont = ValueAssignExK1 (r, state.kont) }
                 |> Success
-
+            
+            // assign-strict-RHS
             | Assign(Atom l,r) when not (isKResult r) -> 
                 { state with 
                     pgmFragment = r 
                     kont = ValueAssignExK2 (l, state.kont) }
                 |> Success
 
+            // assign-LHS2Loc
             | Assign (Atom (Reference rl), r) when isKResult r -> 
+                // TODO: use ConvertToLoc
                 let (h', loc) = Memory.lGetRef state.heap rl ScalarRef
                 let l' = Atom (Location loc)
                 let cmd' = InternalCmd (Assign (l', r))
@@ -227,14 +235,18 @@ module Execution =
                     pgmFragment = cmd' 
                     heap = h' }
                 |> Success
-
+            
+            // assign-RHS2Loc-NonLiteral
             | Assign(l, Atom (Reference r)) when isKResult l ->
                 let rhs = Atom (Location (Memory.rGetRef state.heap r))
                 let cmd' = InternalCmd (Assign (l, rhs))
                 { state with 
                     pgmFragment = cmd' } 
                 |> Success
+            
+            // assign-RHS2LangValue-overflow (TODO)
 
+            // assign-RHS2LangValue-no-overflow
             | Assign(Atom (Location l), Atom (Location (MemLoc n))) -> 
                 let v = Atom (PhpValue (Memory.memRead state.heap n))
                 let cmd' = InternalCmd (Assign(Atom (Location l), v))
@@ -242,16 +254,19 @@ module Execution =
                     pgmFragment = cmd' } 
                 |> Success
                 
+            // assign-RHS2LangValue-locNull
             | Assign(Atom (Location l), Atom (Location (SpecialLoc LocNull))) -> 
                 let v = Atom (PhpValue Null)
                 let cmd' = InternalCmd (Assign(Atom (Location l), v))
                 { state with 
                     pgmFragment = cmd' } 
                 |> Success
-                
+            
+            // assign
             | Assign(Atom (Location l), Atom (PhpValue v)) ->
                 match l with 
                 | MemLoc n ->
+                    // TODO: use CopyValueToLoc
                     let h' = Memory.memUpdate state.heap n v
                     let retVal = Atom (PhpValue v)
                     { state with 
@@ -259,6 +274,10 @@ module Execution =
                         heap = h' }
                     |> Success
                 | _ -> Failure (state, "Attempt to write into LocNull")
+            
+            // assign-error (TODO)
+
+            //--- ARRAY ACCESS 
 
             // array-access-strict-LHS
             | ItemUse (l, r) when not (isKResult l) -> 
@@ -321,6 +340,7 @@ module Execution =
                 
             // Unsupported Internal Command
             | _ -> Failure (state, "Unsupported InternalCmd (semantics-level commands)")
+
     let inject pgm = 
         { pgmFragment = pgm 
           crntScope = initialScope
@@ -343,9 +363,6 @@ module Execution =
         run <| StmtList (Parsing.parseFile f)
 
 module PrettyPrint = 
-    open Devsense.PHP.Syntax
-
-
     let prettyState s  = 
         match s with 
         | Success state ->

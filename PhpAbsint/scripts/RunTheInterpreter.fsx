@@ -14,7 +14,7 @@ open PhpAbsint.Interpreter
 
 (* Php file to run -> feel free to use your own! *)
 
-let file = @"D:\projects\PhpAbsint\PhpAbsint\Test\hello.php"
+let file = @"D:\projects\PhpAbsint\PhpAbsint\tests\hello.php"
 // 
 (* This is how to invoke the parser *)
 
