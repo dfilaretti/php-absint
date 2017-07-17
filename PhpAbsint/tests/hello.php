@@ -1,5 +1,5 @@
 <?php
-	$k = "foo";
+	$k = "PATATA";
 	$x = "hello";
 	$y[$k][] = $x;
 ?>

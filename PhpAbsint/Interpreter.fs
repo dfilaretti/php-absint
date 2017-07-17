@@ -10,31 +10,33 @@ type PgmFragment =
     | StmtList of Ast.Statement list
     | Stmt of Ast.Statement
     | Expr of Ast.Expression
-    | Atom of Atom
+    | KResult of KResult
     | InternalCmd of InternalCmd 
 and InternalCmd = 
     | Assign of PgmFragment * PgmFragment 
     | ItemUse of PgmFragment * PgmFragment
-and Atom = 
+and KResult = 
     | PhpValue of PhpValue
-    | ConvertibleToLoc of ConvertibleToLoc
-    | Location of Loc
-    | Key of Key
-    | Void
+    | ConvertibleToLanguageValue of ConvertibleToLanguageValue
+    | Key of Key // todo: make DU "subcase" of PhpValue?
+    | Void // todo: use Option<KResult> instead?
 and ConvertibleToLoc =
     | Ref of Ref
     //| LiteralValue of LiteralValue
     | ThisTag
+and ConvertibleToLanguageValue = 
+    | Loc of Loc
+    | ConvertibleToLoc of ConvertibleToLoc 
 
 type Kont = 
     | ExprStmtK of Kont
     | SeqK of PgmFragment * Kont 
     // ValueAssign (i.e. assign by value)
     | ValueAssignExK1 of PgmFragment * Kont
-    | ValueAssignExK2 of Atom * Kont
+    | ValueAssignExK2 of KResult * Kont
     // ItemUse (i.e. array access)
     | KItemUseEvalL of PgmFragment * Kont
-    | KItemUseEvalR of Atom * Kont
+    | KItemUseEvalR of KResult * Kont
     | HaltK
 
 type State = 
@@ -69,21 +71,19 @@ module Execution =
     
     
 
-    //type ConvertibleToLanguageValue = 
-    //    | MemLoc of MemLoc
-    //    | ConvertibleToLoc of ConvertibleToLoc 
+
         
     //let convertToLanguageValue t h = 
     //    match t with 
     //    | MemLoc l -> Memory.memRead h l
     //    //| ConvertibleToLoc c -> 
 
-
-    let isKResult p = 
+    /// Whether the input pgm fragment is a KResult.
+    /// TODO: use DU + pattern matching instead
+    let isKResult p =
         match p with 
-        | Atom _ -> true
+        | KResult _ -> true
         | _ -> false
-
 
     let convertToLoc mode heap t =
         match t with 
@@ -109,11 +109,11 @@ module Execution =
 
     let applyKont state =
         match state.pgmFragment with 
-        | Atom value -> 
+        | KResult value -> 
             match state.kont with 
             | ExprStmtK k ->
                 { state with 
-                    pgmFragment = Atom Void 
+                    pgmFragment = KResult Void 
                     kont = k }
                 |> Success
             
@@ -125,7 +125,7 @@ module Execution =
                 | _ -> Failure (state, "Cannot proceed with SeqK, since program fragment is not empty")
             
             | ValueAssignExK1 (r, k) -> 
-                let vLhs = Atom value
+                let vLhs = KResult value
                 let cmd = InternalCmd (Assign (vLhs, r))
                 { state with 
                     pgmFragment = cmd 
@@ -133,15 +133,15 @@ module Execution =
                 |> Success
 
             | ValueAssignExK2 (l, k) -> 
-                let vRhs = Atom value
-                let cmd = InternalCmd (Assign (Atom l, vRhs))
+                let vRhs = KResult value
+                let cmd = InternalCmd (Assign (KResult l, vRhs))
                 { state with 
                     pgmFragment = cmd
                     kont = k }
                 |> Success
             
             | KItemUseEvalL (r, k) ->
-                let vLhs = Atom value 
+                let vLhs = KResult value 
                 let cmd = InternalCmd (ItemUse (vLhs, r))
                 { state with 
                     pgmFragment = cmd 
@@ -149,8 +149,8 @@ module Execution =
                 |> Success
             
             | KItemUseEvalR (l, k) ->
-                let vRhs = Atom value 
-                let cmd = InternalCmd (ItemUse (Atom l, vRhs))
+                let vRhs = KResult value 
+                let cmd = InternalCmd (ItemUse (KResult l, vRhs))
                 { state with 
                     pgmFragment = cmd 
                     kont = k }
@@ -181,11 +181,11 @@ module Execution =
                 |> Success
             // --- EmptyStmt
             | :? Ast.EmptyStmt ->
-                { state with pgmFragment = Atom Void }
+                { state with pgmFragment = KResult Void }
                 |> Success
             | :? Ast.IfStmt as s -> 
                 // TODO:
-                { state with pgmFragment = Atom Void } |> Success
+                { state with pgmFragment = KResult Void } |> Success
             // --- Unsupported 
             | _ -> Failure (state, "Unsupported statement: " + s.ToString())
         
@@ -195,7 +195,7 @@ module Execution =
             | :? Ast.DirectVarUse as e -> 
                 let varName = e.VarName.Value
                 let ref = BasicRef (Loc.MemLoc state.crntScope, StringKey varName)
-                { state with pgmFragment = Atom (ConvertibleToLoc (Ref ref)) }
+                { state with pgmFragment = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref ref))) }
                 |> Success
 
             // --- Array Access                
@@ -203,7 +203,7 @@ module Execution =
                 let arrayExp = Expr e.Array
                 let keyExp = 
                     if isNull e.Index then
-                        Atom Void // no key!
+                        KResult Void // no key!
                     else
                         Expr e.Index
                 let cmd = InternalCmd (ItemUse (arrayExp, keyExp))
@@ -219,17 +219,17 @@ module Execution =
             // --- Literal
             | :? Ast.LongIntLiteral as l -> 
                 let v = int l.Value
-                { state with pgmFragment = Atom (PhpValue (Int v)) }
+                { state with pgmFragment = KResult (PhpValue (Int v)) }
                 |> Success
 
             | :? Ast.StringLiteral as l -> 
                 let v = string l.Value
-                { state with pgmFragment = Atom (PhpValue (String v)) }
+                { state with pgmFragment = KResult (PhpValue (String v)) }
                 |> Success
             
             // --- Unsupported
             | _ -> Failure (state, "Unsupported expression: " + expr.ToString())
-        | Atom a ->
+        | KResult a ->
             applyKont state
         
         // Internal commands
@@ -246,16 +246,16 @@ module Execution =
                 |> Success
             
             // assign-strict-RHS
-            | Assign(Atom l,r) when not (isKResult r) -> 
+            | Assign(KResult l,r) when not (isKResult r) -> 
                 { state with 
                     pgmFragment = r 
                     kont = ValueAssignExK2 (l, state.kont) }
                 |> Success
 
             // assign-LHS2Loc
-            | Assign (Atom (ConvertibleToLoc c), r) when isKResult r -> 
+            | Assign (KResult (ConvertibleToLanguageValue (ConvertibleToLoc c)), r) when isKResult r -> 
                 let (h', loc) = convertToLoc Lhs state.heap c
-                let l' = Atom (Location loc)
+                let l' = KResult (ConvertibleToLanguageValue (Loc loc))
                 let cmd' = InternalCmd (Assign (l', r))
                 { state with 
                     pgmFragment = cmd' 
@@ -263,9 +263,9 @@ module Execution =
                 |> Success
 
             // assign-RHS2Loc-NonLiteral (todo: side-condition)
-            | Assign(l, Atom (ConvertibleToLoc r)) when isKResult l ->
+            | Assign(l, KResult (ConvertibleToLanguageValue (ConvertibleToLoc r))) when isKResult l ->
                 let h', loc = convertToLoc Rhs state.heap r 
-                let rhs = Atom (Location loc)
+                let rhs = KResult (ConvertibleToLanguageValue (Loc loc))
                 let cmd' = InternalCmd (Assign (l, rhs))
                 { state with 
                     heap = h' 
@@ -275,29 +275,29 @@ module Execution =
             // assign-RHS2LangValue-overflow (TODO)
 
             // assign-RHS2LangValue-no-overflow
-            | Assign(Atom (Location l), Atom (Location (Loc.MemLoc n))) -> 
+            | Assign(KResult (ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc (Loc.MemLoc n)))) -> 
                 // TODO: use convertToLanguageValue instead of Memory.memRead
-                let v = Atom (PhpValue (Memory.memRead state.heap n))
-                let cmd' = InternalCmd (Assign(Atom (Location l), v))
+                let v = KResult (PhpValue (Memory.memRead state.heap n))
+                let cmd' = InternalCmd (Assign(KResult (ConvertibleToLanguageValue (Loc l)), v))
                 { state with 
                     pgmFragment = cmd' } 
                 |> Success
                 
             // assign-RHS2LangValue-locNull
-            | Assign(Atom (Location l), Atom (Location (SpecialLoc LocNull))) -> 
-                let v = Atom (PhpValue Null)
-                let cmd' = InternalCmd (Assign(Atom (Location l), v))
+            | Assign(KResult(ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc (SpecialLoc LocNull)))) -> 
+                let v = KResult (PhpValue Null)
+                let cmd' = InternalCmd (Assign(KResult (ConvertibleToLanguageValue (Loc l)), v))
                 { state with 
                     pgmFragment = cmd' } 
                 |> Success
             
             // assign
-            | Assign(Atom (Location l), Atom (PhpValue v)) ->
+            | Assign(KResult (ConvertibleToLanguageValue (Loc l)), KResult (PhpValue v)) ->
                 match l with 
                 | Loc.MemLoc n ->
                     // TODO: use CopyValueToLoc
                     let h' = Memory.memUpdate state.heap n v
-                    let retVal = Atom (PhpValue v)
+                    let retVal = KResult (PhpValue v)
                     { state with 
                         pgmFragment = retVal
                         heap = h' }
@@ -316,7 +316,7 @@ module Execution =
                 |> Success
 
             // array-access-strict-RHS
-            | ItemUse (Atom l, r) when not (isKResult r) -> 
+            | ItemUse (KResult l, r) when not (isKResult r) -> 
                 { state with 
                     pgmFragment = r 
                     kont = KItemUseEvalR (l, state.kont) }
@@ -332,16 +332,16 @@ module Execution =
             //    { state with 
             //        pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
             //    |> Success
-            | ItemUse (l, Atom (ConvertibleToLoc r)) ->
+            | ItemUse (l, KResult (ConvertibleToLanguageValue (ConvertibleToLoc r))) ->
                 let h', loc = convertToLoc Rhs state.heap r
-                let rhsLoc =  Atom (Location loc)
+                let rhsLoc =  KResult (ConvertibleToLanguageValue(Loc loc))
                 { state with 
                     heap = h'
                     pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
                 |> Success
 
-            | ItemUse (l, Atom (Location (Loc.MemLoc n))) ->
-                let v = Atom (PhpValue (Memory.memRead state.heap n))
+            | ItemUse (l, KResult (ConvertibleToLanguageValue (Loc (Loc.MemLoc n)))) ->
+                let v = KResult (PhpValue (Memory.memRead state.heap n))
                 { state with 
                     pgmFragment = InternalCmd (ItemUse (l, v)) }
                 |> Success                            
@@ -350,28 +350,28 @@ module Execution =
             // array-access-key-cast-float
             // array-access-key-cast-bool
             // array-access-key-cast-string
-            | ItemUse (l, Atom (PhpValue v)) ->
-                let key = Atom (Key (value2Key v))
+            | ItemUse (l, KResult (PhpValue v)) ->
+                let key = KResult (Key (value2Key v))
                 { state with 
                     pgmFragment = InternalCmd (ItemUse (l, key)) }
                 |> Success
             
             // array-access-no-key
-            | ItemUse (l, Atom Void) ->
-                let key = Atom (Key UndefKey)
+            | ItemUse (l, KResult Void) ->
+                let key = KResult (Key UndefKey)
                 { state with 
                     pgmFragment = InternalCmd (ItemUse (l, key)) }
                 |> Success
 
             // array-access-simple [ I think unused ATM -- has to do with literals? ]
-            | ItemUse (Atom (Location l), Atom (Key k)) -> 
-                let ref = Atom (ConvertibleToLoc (Ref (BasicRef (l, k))))
+            | ItemUse (KResult (ConvertibleToLanguageValue (Loc l)), KResult (Key k)) -> 
+                let ref = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref (BasicRef (l, k)))))
                 { state with pgmFragment = ref }
                 |> Success                                                    
             
             // array-access-nested
-            | ItemUse (Atom (ConvertibleToLoc (Ref r)), Atom (Key k)) -> 
-                let ref = Atom (ConvertibleToLoc (Ref (ComplexRef (r, k, RefType.ArrayRef))))
+            | ItemUse (KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref r))), KResult (Key k)) -> 
+                let ref = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref (ComplexRef (r, k, RefType.ArrayRef)))))
                 { state with pgmFragment = ref }
                 |> Success                                        
                 
