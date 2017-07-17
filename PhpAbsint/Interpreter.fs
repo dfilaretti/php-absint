@@ -2,6 +2,10 @@ namespace PhpAbsint.Interpreter
 open PhpAbsint.KphpLib
 open Devsense.PHP.Syntax
 
+type ConversionToLocMode = Lhs | Rhs
+
+
+
 type PgmFragment = 
     | StmtList of Ast.Statement list
     | Stmt of Ast.Statement
@@ -13,10 +17,14 @@ and InternalCmd =
     | ItemUse of PgmFragment * PgmFragment
 and Atom = 
     | PhpValue of PhpValue
-    | Reference of Ref
+    | ConvertibleToLoc of ConvertibleToLoc
     | Location of Loc
     | Key of Key
     | Void
+and ConvertibleToLoc =
+    | Ref of Ref
+    //| LiteralValue of LiteralValue
+    | ThisTag
 
 type Kont = 
     | ExprStmtK of Kont
@@ -58,27 +66,32 @@ module Parsing =
 
 [<RequireQualifiedAccess>]
 module Execution = 
+    
+    
+
+    //type ConvertibleToLanguageValue = 
+    //    | MemLoc of MemLoc
+    //    | ConvertibleToLoc of ConvertibleToLoc 
+        
+    //let convertToLanguageValue t h = 
+    //    match t with 
+    //    | MemLoc l -> Memory.memRead h l
+    //    //| ConvertibleToLoc c -> 
+
 
     let isKResult p = 
         match p with 
         | Atom _ -> true
         | _ -> false
 
-    let isConvertibleToLoc t = 
+
+    let convertToLoc mode heap t =
         match t with 
-        | Atom.Reference _ -> true
-        // todo: LiteralValue | ThisTag 
-        | _ -> false
-
-    type ConversionToLocMode = Lhs | Rhs
-
-    let convertToLoc mode heap atom =
-        match atom with 
-        | Reference r -> 
+        | Ref r -> 
             match mode with 
             | Lhs -> Memory.lGet heap r
             | Rhs -> heap, Memory.rGet heap r
-        | _ -> failwith "ERROR: convertToLoc called with wrong params." 
+        //| ThisTag -> SpecialLoc LocNull
 
     /// Transforms a PhpValue into a Key.    
     let value2Key v=
@@ -146,10 +159,6 @@ module Execution =
             | _ -> Failure (state, "Kontinuation not supported: " + state.kont.ToString())
         | _ -> Failure (state, "Attempt to apply a Kontinuation, but PgmFragment does not contain a Value")            
 
-    
-
-      
-
     let step state = 
         match state.pgmFragment with 
         | StmtList ss ->
@@ -161,7 +170,6 @@ module Execution =
                     kont = SeqK (StmtList pgm, state.kont) } 
                 |> Success                         
         
-        // | Stmt s, sl, h, k) -> 
         | Stmt s -> 
             match s with
             // --- Expression Stmt 
@@ -181,14 +189,13 @@ module Execution =
             // --- Unsupported 
             | _ -> Failure (state, "Unsupported statement: " + s.ToString())
         
-        // | State (Expr expr, s, h, k) -> 
         | Expr expr -> 
             match expr with 
             // --- Variable Access
             | :? Ast.DirectVarUse as e -> 
                 let varName = e.VarName.Value
-                let ref = BasicRef (MemLoc state.crntScope, StringKey varName)
-                { state with pgmFragment = Atom (Reference ref) }
+                let ref = BasicRef (Loc.MemLoc state.crntScope, StringKey varName)
+                { state with pgmFragment = Atom (ConvertibleToLoc (Ref ref)) }
                 |> Success
 
             // --- Array Access                
@@ -246,8 +253,8 @@ module Execution =
                 |> Success
 
             // assign-LHS2Loc
-            | Assign (Atom (Reference rl), r) when isKResult r -> 
-                let (h', loc) = convertToLoc Lhs state.heap (Reference rl)
+            | Assign (Atom (ConvertibleToLoc c), r) when isKResult r -> 
+                let (h', loc) = convertToLoc Lhs state.heap c
                 let l' = Atom (Location loc)
                 let cmd' = InternalCmd (Assign (l', r))
                 { state with 
@@ -255,8 +262,8 @@ module Execution =
                     heap = h' }
                 |> Success
 
-            // assign-RHS2Loc-NonLiteral
-            | Assign(l, Atom r) when isKResult l && isConvertibleToLoc r ->
+            // assign-RHS2Loc-NonLiteral (todo: side-condition)
+            | Assign(l, Atom (ConvertibleToLoc r)) when isKResult l ->
                 let h', loc = convertToLoc Rhs state.heap r 
                 let rhs = Atom (Location loc)
                 let cmd' = InternalCmd (Assign (l, rhs))
@@ -268,7 +275,7 @@ module Execution =
             // assign-RHS2LangValue-overflow (TODO)
 
             // assign-RHS2LangValue-no-overflow
-            | Assign(Atom (Location l), Atom (Location (MemLoc n))) -> 
+            | Assign(Atom (Location l), Atom (Location (Loc.MemLoc n))) -> 
                 // TODO: use convertToLanguageValue instead of Memory.memRead
                 let v = Atom (PhpValue (Memory.memRead state.heap n))
                 let cmd' = InternalCmd (Assign(Atom (Location l), v))
@@ -287,7 +294,7 @@ module Execution =
             // assign
             | Assign(Atom (Location l), Atom (PhpValue v)) ->
                 match l with 
-                | MemLoc n ->
+                | Loc.MemLoc n ->
                     // TODO: use CopyValueToLoc
                     let h' = Memory.memUpdate state.heap n v
                     let retVal = Atom (PhpValue v)
@@ -325,7 +332,7 @@ module Execution =
             //    { state with 
             //        pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
             //    |> Success
-            | ItemUse (l, Atom r) when isConvertibleToLoc r ->
+            | ItemUse (l, Atom (ConvertibleToLoc r)) ->
                 let h', loc = convertToLoc Rhs state.heap r
                 let rhsLoc =  Atom (Location loc)
                 { state with 
@@ -333,7 +340,7 @@ module Execution =
                     pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
                 |> Success
 
-            | ItemUse (l, Atom (Location (MemLoc n))) ->
+            | ItemUse (l, Atom (Location (Loc.MemLoc n))) ->
                 let v = Atom (PhpValue (Memory.memRead state.heap n))
                 { state with 
                     pgmFragment = InternalCmd (ItemUse (l, v)) }
@@ -358,13 +365,13 @@ module Execution =
 
             // array-access-simple [ I think unused ATM -- has to do with literals? ]
             | ItemUse (Atom (Location l), Atom (Key k)) -> 
-                let ref = Atom (Reference (BasicRef (l, k)))
+                let ref = Atom (ConvertibleToLoc (Ref (BasicRef (l, k))))
                 { state with pgmFragment = ref }
                 |> Success                                                    
             
             // array-access-nested
-            | ItemUse (Atom (Reference r), Atom (Key k)) -> 
-                let ref = Atom (Reference (ComplexRef (r, k, RefType.ArrayRef)))
+            | ItemUse (Atom (ConvertibleToLoc (Ref r)), Atom (Key k)) -> 
+                let ref = Atom (ConvertibleToLoc (Ref (ComplexRef (r, k, RefType.ArrayRef))))
                 { state with pgmFragment = ref }
                 |> Success                                        
                 
