@@ -20,13 +20,13 @@ and KResult =
     | ConvertibleToLanguageValue of ConvertibleToLanguageValue
     | Key of Key // todo: make DU "subcase" of PhpValue?
     | Void // todo: use Option<KResult> instead?
+and ConvertibleToLanguageValue = 
+    | Loc of Loc
+    | ConvertibleToLoc of ConvertibleToLoc 
 and ConvertibleToLoc =
     | Ref of Ref
     //| LiteralValue of LiteralValue
     | ThisTag
-and ConvertibleToLanguageValue = 
-    | Loc of Loc
-    | ConvertibleToLoc of ConvertibleToLoc 
 
 type Kont = 
     | ExprStmtK of Kont
@@ -68,10 +68,6 @@ module Parsing =
 
 [<RequireQualifiedAccess>]
 module Execution = 
-    
-    
-
-
         
     //let convertToLanguageValue t h = 
     //    match t with 
