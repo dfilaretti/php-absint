@@ -2,14 +2,10 @@ namespace PhpAbsint.KphpLib
 
 (* Locations *)
 
-/// Memory locations as simple integers
-type MemLoc = int
-/// Semantics-level locations
-type SpecialLoc = LocNull
-/// Locations consist of actual memory locations together with special ones
 type Loc = 
-    | MemLoc of MemLoc 
-    | SpecialLoc of SpecialLoc
+    | MemLoc of int 
+    | LocNull
+
 /// Hashtable keys are int or strings
 type Key = 
     | IntKey of int
@@ -18,7 +14,7 @@ type Key =
 
 (* HashTables *)
 
-type KvPair = Key * MemLoc // TODO: generalise?
+type KvPair = Key * int
 
 type HashTable = 
     { elements: KvPair list
@@ -53,9 +49,9 @@ type Zval =
 (* Heap *)
 
 type Heap = 
-    { Map: Map<MemLoc, Zval>;
+    { Map: Map<int, Zval>;
       // TODO: use closure for NextFreshLoc! 
-      NextFreshLoc: MemLoc; }
+      NextFreshLoc: int; }
 
 (* References *)
 
@@ -108,7 +104,7 @@ module HashTable =
     /// TODO: what doesk KPHP do in the "null" case?
     let readValue ht k = 
         match (MyDict.dictRef ht.elements k) with 
-        | None -> SpecialLoc LocNull
+        | None -> LocNull
         | Some l -> MemLoc l
 
     /// checks whether the hashtable contains a key-value pair with given key
@@ -223,7 +219,11 @@ module Heap =
 // TODO: maybe this could go on its own file???
 module Memory = 
     /// Returns the contents of memory at the given location (value only)
-    let memRead h l = (Heap.readLoc h l).Value
+    let memRead h l = 
+        match l with 
+        | MemLoc l -> (Heap.readLoc h l).Value
+        | LocNull -> Null
+        // String s -> s (see KPHP)
 
     /// Updates the value inside the zval at location loc. 
     let memUpdate h l v = 
@@ -235,7 +235,7 @@ module Memory =
     // Returns the updated heap. If scope-loc does not contain a hashtable,
     // the initial unomodified heap is returned insteaf. TODO: contract?
     let memInsertKv heap scopeLoc key loc = 
-        let z = memRead heap scopeLoc
+        let z = memRead heap (MemLoc scopeLoc)
         match z with 
         | PhpValue.Array ht ->
             let ht' = HashTable.insertKeyValue key loc ht
@@ -260,13 +260,13 @@ module Memory =
                         if (HashTable.hasKey ht key) then
                             HashTable.readValue ht key
                         else
-                            SpecialLoc LocNull
+                            LocNull
                     // object
                     // string
-                    | _ -> SpecialLoc LocNull
+                    | _ -> LocNull
                 else
-                    SpecialLoc LocNull
-            | SpecialLoc LocNull -> SpecialLoc LocNull
+                    LocNull
+            | LocNull -> LocNull
     
     /// bodge?
     let rGet = rGetRef
@@ -310,8 +310,8 @@ module Memory =
                     // string (todo)
                     | _ -> 
                         printfn "Cannot use scalar value as an array in on line"
-                        (heap, SpecialLoc LocNull)
-             | SpecialLoc LocNull -> (heap, SpecialLoc LocNull)
+                        (heap, LocNull)
+             | LocNull -> (heap, LocNull)
     
     let lGet heap ref = 
         lGetRef heap ref ScalarRef

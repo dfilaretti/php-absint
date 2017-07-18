@@ -4,8 +4,6 @@ open Devsense.PHP.Syntax
 
 type ConversionToLocMode = Lhs | Rhs
 
-
-
 type PgmFragment = 
     | StmtList of Ast.Statement list
     | Stmt of Ast.Statement
@@ -41,7 +39,7 @@ type Kont =
 
 type State = 
     { pgmFragment : PgmFragment
-      crntScope : MemLoc
+      crntScope : int
       heap : Heap
       kont : Kont }
 
@@ -68,11 +66,6 @@ module Parsing =
 
 [<RequireQualifiedAccess>]
 module Execution = 
-        
-    //let convertToLanguageValue t h = 
-    //    match t with 
-    //    | MemLoc l -> Memory.memRead h l
-    //    //| ConvertibleToLoc c -> 
 
     /// Whether the input pgm fragment is a KResult.
     /// TODO: use DU + pattern matching instead
@@ -80,7 +73,8 @@ module Execution =
         match p with 
         | KResult _ -> true
         | _ -> false
-
+    
+    // todo: move to KphpLib?
     let convertToLoc mode heap t =
         match t with 
         | Ref r -> 
@@ -88,6 +82,14 @@ module Execution =
             | Lhs -> Memory.lGet heap r
             | Rhs -> heap, Memory.rGet heap r
         //| ThisTag -> SpecialLoc LocNull
+    
+    // todo: move to KphpLib?
+    let convertToLanguageValue h t = 
+        match t with 
+        | Loc l -> h, Memory.memRead h l
+        | ConvertibleToLoc c -> 
+            let h', l = convertToLoc Rhs h c
+            h', Memory.memRead h' l
 
     /// Transforms a PhpValue into a Key.    
     let value2Key v=
@@ -271,16 +273,17 @@ module Execution =
             // assign-RHS2LangValue-overflow (TODO)
 
             // assign-RHS2LangValue-no-overflow
-            | Assign(KResult (ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc (Loc.MemLoc n)))) -> 
-                // TODO: use convertToLanguageValue instead of Memory.memRead
-                let v = KResult (PhpValue (Memory.memRead state.heap n))
+            | Assign(KResult (ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc (MemLoc n)))) -> 
+                // NB: KPHP uses convertToLanguageValue here. However, it's inconvenient since 
+                //     we already know l:Loc, hence we can avoid having to update the heap etc...
+                let v = KResult (PhpValue (Memory.memRead state.heap (MemLoc n)))
                 let cmd' = InternalCmd (Assign(KResult (ConvertibleToLanguageValue (Loc l)), v))
                 { state with 
                     pgmFragment = cmd' } 
                 |> Success
                 
             // assign-RHS2LangValue-locNull
-            | Assign(KResult(ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc (SpecialLoc LocNull)))) -> 
+            | Assign(KResult(ConvertibleToLanguageValue (Loc l)), KResult (ConvertibleToLanguageValue(Loc LocNull))) -> 
                 let v = KResult (PhpValue Null)
                 let cmd' = InternalCmd (Assign(KResult (ConvertibleToLanguageValue (Loc l)), v))
                 { state with 
@@ -318,30 +321,14 @@ module Execution =
                     kont = KItemUseEvalR (l, state.kont) }
                 |> Success           
 
-            // NB next 3 rules corresponds to the single array-access-LHS2LangValue
-            //      in KPHP. This is thanks to ConvertibleToLanguageValue etc.
-            // TODO: decide whether to reimplement ConvertibleToLanguageValue etc. here or not
-            
-            // array-access-LHS2LangValue [ simplified ]
-            //| ItemUse (l, Atom (Reference r)) ->
-            //    let rhsLoc =  Atom (Location (Memory.rGetRef state.heap r))
-            //    { state with 
-            //        pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
-            //    |> Success
-            | ItemUse (l, KResult (ConvertibleToLanguageValue (ConvertibleToLoc r))) ->
-                let h', loc = convertToLoc Rhs state.heap r
-                let rhsLoc =  KResult (ConvertibleToLanguageValue(Loc loc))
+            // array-access-RHS2LangValue
+            | ItemUse (l, KResult (ConvertibleToLanguageValue c)) ->
+                let h', v =  convertToLanguageValue state.heap c
+                let rhsVal =  KResult (PhpValue v)
                 { state with 
                     heap = h'
-                    pgmFragment = InternalCmd (ItemUse (l, rhsLoc)) }
+                    pgmFragment = InternalCmd (ItemUse (l, rhsVal)) }
                 |> Success
-
-            | ItemUse (l, KResult (ConvertibleToLanguageValue (Loc (Loc.MemLoc n)))) ->
-                let v = KResult (PhpValue (Memory.memRead state.heap n))
-                { state with 
-                    pgmFragment = InternalCmd (ItemUse (l, v)) }
-                |> Success                            
-            // locNull case (?)
 
             // array-access-key-cast-float
             // array-access-key-cast-bool
