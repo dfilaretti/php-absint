@@ -330,8 +330,8 @@ module Execution =
                 { state with pgmFragment = KResult Void } |> Success
 
             //| IfStmt (h::T) -> 
-            //    let condition = h.Condition
-            //    printfn "XOXO"
+                
+            //    let condition = h. Condition
             //    { state with pgmFragment = InternalCmd (IfStmt T) } |> Success
 
             //--- ARRAY ACCESS 
@@ -408,8 +408,7 @@ module Execution =
         let s0 = Success (inject pgm)
         step' s0
 
-    let runFile f = 
-        run <| StmtList (Parsing.parseFile f)
+    let runFile f = Parsing.parseFile f |> StmtList |> run
 
 module PrettyPrint = 
     let prettyState s  = 
