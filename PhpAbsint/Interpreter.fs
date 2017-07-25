@@ -13,6 +13,7 @@ type PgmFragment =
 and InternalCmd = 
     | Assign of PgmFragment * PgmFragment 
     | ItemUse of PgmFragment * PgmFragment
+    | IfStmt of List<Ast.ConditionalStmt>
 and KResult = 
     | PhpValue of PhpValue
     | ConvertibleToLanguageValue of ConvertibleToLanguageValue
@@ -157,6 +158,9 @@ module Execution =
             | _ -> Failure (state, "Kontinuation not supported: " + state.kont.ToString())
         | _ -> Failure (state, "Attempt to apply a Kontinuation, but PgmFragment does not contain a Value")            
 
+    let constNameAsString (c: Ast.GlobalConstUse) =
+        c.Name.Name.Value 
+
     let step state = 
         match state.pgmFragment with 
         | StmtList ss ->
@@ -181,14 +185,27 @@ module Execution =
             | :? Ast.EmptyStmt ->
                 { state with pgmFragment = KResult Void }
                 |> Success
+            // --- IfStmt
             | :? Ast.IfStmt as s -> 
-                // TODO:
-                { state with pgmFragment = KResult Void } |> Success
+                let conditions = Seq.toList s.Conditions
+                let cmd = InternalCmd (IfStmt conditions)
+                { state with pgmFragment = cmd } |> Success
             // --- Unsupported 
             | _ -> Failure (state, "Unsupported statement: " + s.ToString())
         
         | Expr expr -> 
-            match expr with 
+            match expr with
+            // --- GlobalconstUse
+            | :? Ast.GlobalConstUse as e when constNameAsString e = "true" -> 
+                // TODO: this seems to be used for 'true' and 'false' in addition to standard constants
+                { state with pgmFragment = KResult (PhpValue (Bool true)) }
+                |> Success
+            | :? Ast.GlobalConstUse as e when constNameAsString e = "false" -> 
+                // TODO: this seems to be used for 'true' and 'false' in addition to standard constants
+                { state with pgmFragment = KResult (PhpValue (Bool false)) }
+                |> Success
+            // TODO: "normal constants"
+
             // --- Variable Access
             | :? Ast.DirectVarUse as e -> 
                 let varName = e.VarName.Value
@@ -304,6 +321,18 @@ module Execution =
                 | _ -> Failure (state, "Attempt to write into LocNull")
             
             // assign-error (TODO)
+
+            //--- IF STATEMENT 
+            // NB: this is shaped a bit differently than in KPHP mostly 'cause 
+            //     the AST is shaped differently...
+
+            | IfStmt [] -> 
+                { state with pgmFragment = KResult Void } |> Success
+
+            //| IfStmt (h::T) -> 
+            //    let condition = h.Condition
+            //    printfn "XOXO"
+            //    { state with pgmFragment = InternalCmd (IfStmt T) } |> Success
 
             //--- ARRAY ACCESS 
 
