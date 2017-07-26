@@ -50,6 +50,11 @@ type Result<'TSuccess, 'TFailure> =
     | Failure of 'TFailure * string
 
 [<RequireQualifiedAccess>]
+
+module Aux = 
+    let ref2KResult ref =  
+        KResult(ConvertibleToLanguageValue(ConvertibleToLoc(Ref ref)))
+
 module Parsing = 
     open System.Text
     let readFile filename = 
@@ -214,10 +219,8 @@ module Execution =
                 let loc  = Loc.MemLoc state.crntScope
                 let key  = StringKey e.VarName.Value
                 let ref  = BasicRef (loc, key)
-                let pgm' = KResult(ConvertibleToLanguageValue
-                                      (ConvertibleToLoc(Ref ref)))
-                { state with pgmFragment = pgm' }
-                |> Success
+                let pgm' = Aux.ref2KResult ref
+                { state with pgmFragment = pgm' } |> Success
 
             // --- Array Access                
             | :? Ast.ItemUse as e -> 
