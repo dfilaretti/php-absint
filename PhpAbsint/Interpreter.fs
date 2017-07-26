@@ -375,20 +375,28 @@ module Execution =
                     pgmFragment = InternalCmd (ItemUse (l, key)) }
                 |> Success
 
-            // array-access-simple [ I think unused ATM -- has to do with literals? ]
-            | ItemUse (KResult (ConvertibleToLanguageValue (Loc l)), KResult (Key k)) -> 
-                let ref = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref (BasicRef (l, k)))))
+            // array-access-simple [ I think unused ATM -- literals? ]
+            | ItemUse (KResult (ConvertibleToLanguageValue (Loc l)), 
+                       KResult (Key k)) -> 
+                let ref = KResult(ConvertibleToLanguageValue 
+                                 (ConvertibleToLoc (Ref (BasicRef (l, k)))))
                 { state with pgmFragment = ref }
                 |> Success                                                    
             
             // array-access-nested
-            | ItemUse (KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref r))), KResult (Key k)) -> 
-                let ref = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref (ComplexRef (r, k, RefType.ArrayRef)))))
+            | ItemUse (KResult(ConvertibleToLanguageValue 
+                              (ConvertibleToLoc (Ref r))), 
+                       KResult(Key k)) -> 
+                let ref = KResult(ConvertibleToLanguageValue 
+                                 (ConvertibleToLoc 
+                                 (Ref (ComplexRef (r, k, RefType.ArrayRef)))))
                 { state with pgmFragment = ref }
                 |> Success                                        
                 
             // Unsupported Internal Command
-            | _ -> Failure (state, "Unsupported InternalCmd (semantics-level commands)")
+            | _ -> Failure (
+                       state, 
+                       "Unsupported InternalCmd (semantics-level commands)")
 
     let inject pgm = 
         { pgmFragment = pgm 
