@@ -55,6 +55,12 @@ module Aux =
     let ref2KResult ref =  
         KResult(ConvertibleToLanguageValue(ConvertibleToLoc(Ref ref)))
 
+    let phpValue2KResult v = 
+        KResult (PhpValue v)
+
+    let loc2KResult l = 
+        KResult (ConvertibleToLanguageValue (Loc l))
+
 module Parsing = 
     open System.Text
     let readFile filename = 
@@ -207,10 +213,10 @@ module Execution =
             | :? Ast.GlobalConstUse as e when constNameAsString e = "true" -> 
                 // TODO: this seems to be used for 'true' and 'false' 
                 // (in addition to standard constants)
-                { state with pgmFragment = KResult (PhpValue (Bool true)) }
+                { state with pgmFragment = Aux.phpValue2KResult (Bool true) }
                 |> Success
             | :? Ast.GlobalConstUse as e when constNameAsString e = "false" -> 
-                { state with pgmFragment = KResult (PhpValue (Bool false)) }
+                { state with pgmFragment = Aux.phpValue2KResult (Bool false) }
                 |> Success
             // TODO: "normal constants"
 
@@ -243,12 +249,12 @@ module Execution =
             // --- Literal
             | :? Ast.LongIntLiteral as l -> 
                 let v = int l.Value
-                { state with pgmFragment = KResult (PhpValue (Int v)) }
+                { state with pgmFragment = Aux.phpValue2KResult (Int v) }
                 |> Success
 
             | :? Ast.StringLiteral as l -> 
                 let v = string l.Value
-                { state with pgmFragment = KResult (PhpValue (String v)) }
+                { state with pgmFragment = Aux.phpValue2KResult (String v) }
                 |> Success
             
             // --- Unsupported
@@ -279,7 +285,7 @@ module Execution =
             // assign-LHS2Loc
             | Assign (KResult (ConvertibleToLanguageValue (ConvertibleToLoc c)), r) when isKResult r -> 
                 let (h', loc) = convertToLoc Lhs state.heap c
-                let l' = KResult (ConvertibleToLanguageValue (Loc loc))
+                let l' = Aux.loc2KResult loc
                 let cmd' = InternalCmd (Assign (l', r))
                 { state with 
                     pgmFragment = cmd' 
@@ -362,7 +368,7 @@ module Execution =
             // array-access-RHS2LangValue
             | ItemUse (l, KResult (ConvertibleToLanguageValue c)) ->
                 let h', v =  convertToLanguageValue state.heap c
-                let rhsVal =  KResult (PhpValue v)
+                let rhsVal =  Aux.phpValue2KResult v
                 { state with 
                     heap = h'
                     pgmFragment = InternalCmd (ItemUse (l, rhsVal)) }
