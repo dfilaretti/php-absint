@@ -121,14 +121,15 @@ module Execution =
                 | Void -> 
                     { state with pgmFragment = restOfPgm; kont = k } 
                     |> Success
-                | _ -> Failure (state, "Cannot proceed with SeqK, since program fragment is not empty")
+                | _ -> Failure (state, "Cannot proceed with SeqK 
+                                        since program fragment is not empty")
             
             | ValueAssignExK1 (r, k) -> 
                 let vLhs = KResult value
                 let cmd = InternalCmd (Assign (vLhs, r))
                 { state with 
                     pgmFragment = cmd 
-                    kont = k }
+                    kont = k } 
                 |> Success
 
             | ValueAssignExK2 (l, k) -> 
@@ -155,8 +156,10 @@ module Execution =
                     kont = k }
                 |> Success
             
-            | _ -> Failure (state, "Kontinuation not supported: " + state.kont.ToString())
-        | _ -> Failure (state, "Attempt to apply a Kontinuation, but PgmFragment does not contain a Value")            
+            | _ -> Failure (state, "Kontinuation not supported: " 
+                                   + state.kont.ToString())
+        | _ -> Failure (state, "Attempt to apply a Kontinuation, 
+                                but PgmFragment does not contain a Value")            
 
     let constNameAsString (c: Ast.GlobalConstUse) =
         c.Name.Name.Value 
@@ -197,20 +200,23 @@ module Execution =
             match expr with
             // --- GlobalconstUse
             | :? Ast.GlobalConstUse as e when constNameAsString e = "true" -> 
-                // TODO: this seems to be used for 'true' and 'false' in addition to standard constants
+                // TODO: this seems to be used for 'true' and 'false' 
+                // (in addition to standard constants)
                 { state with pgmFragment = KResult (PhpValue (Bool true)) }
                 |> Success
             | :? Ast.GlobalConstUse as e when constNameAsString e = "false" -> 
-                // TODO: this seems to be used for 'true' and 'false' in addition to standard constants
                 { state with pgmFragment = KResult (PhpValue (Bool false)) }
                 |> Success
             // TODO: "normal constants"
 
             // --- Variable Access
             | :? Ast.DirectVarUse as e -> 
-                let varName = e.VarName.Value
-                let ref = BasicRef (Loc.MemLoc state.crntScope, StringKey varName)
-                { state with pgmFragment = KResult (ConvertibleToLanguageValue (ConvertibleToLoc (Ref ref))) }
+                let loc  = Loc.MemLoc state.crntScope
+                let key  = StringKey e.VarName.Value
+                let ref  = BasicRef (loc, key)
+                let pgm' = KResult(ConvertibleToLanguageValue
+                                      (ConvertibleToLoc(Ref ref)))
+                { state with pgmFragment = pgm' }
                 |> Success
 
             // --- Array Access                
