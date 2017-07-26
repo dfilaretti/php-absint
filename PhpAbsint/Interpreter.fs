@@ -387,20 +387,17 @@ module Execution =
             // array-access-simple [ I think unused ATM -- literals? ]
             | ItemUse (KResult (ConvertibleToLanguageValue (Loc l)), 
                        KResult (Key k)) -> 
-                let ref = KResult(ConvertibleToLanguageValue 
-                                 (ConvertibleToLoc (Ref (BasicRef (l, k)))))
-                { state with pgmFragment = ref }
-                |> Success                                                    
+                let ref = BasicRef (l, k)
+                let pgm' = Aux.ref2KResult ref
+                { state with pgmFragment = pgm' } |> Success                                                    
             
             // array-access-nested
-            | ItemUse (KResult(ConvertibleToLanguageValue 
-                              (ConvertibleToLoc (Ref r))), 
-                       KResult(Key k)) -> 
-                let ref = KResult(ConvertibleToLanguageValue 
-                                 (ConvertibleToLoc 
-                                 (Ref (ComplexRef (r, k, RefType.ArrayRef)))))
-                { state with pgmFragment = ref }
-                |> Success                                        
+            | ItemUse(KResult(ConvertibleToLanguageValue
+                             (ConvertibleToLoc(Ref r))), 
+                      KResult(Key k)) -> 
+                let ref' = ComplexRef (r, k, RefType.ArrayRef)
+                let ref  = Aux.ref2KResult ref'
+                { state with pgmFragment = ref } |> Success                                        
                 
             // Unsupported Internal Command
             | _ -> Failure (
