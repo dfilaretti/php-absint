@@ -13,7 +13,8 @@ type PgmFragment =
 and InternalCmd = 
     | Assign of PgmFragment * PgmFragment 
     | ItemUse of PgmFragment * PgmFragment
-    | IfStmt of List<Ast.ConditionalStmt>
+    | IfStmt of InternalCmd List
+    | ConditionalStmt of PgmFragment * PgmFragment
 and KResult = 
     | PhpValue of PhpValue
     | ConvertibleToLanguageValue of ConvertibleToLanguageValue
@@ -36,6 +37,11 @@ type Kont =
     // ItemUse (i.e. array access)
     | KItemUseEvalL of PgmFragment * Kont
     | KItemUseEvalR of KResult * Kont
+    // IfStmt
+    | KIfStmtEvalGuard of PgmFragment * InternalCmd list * Kont
+    // BlockStmt
+    | KBlockStmt of Kont
+    // Halt
     | HaltK
 
 type State = 
@@ -167,6 +173,19 @@ module Execution =
                     kont = k }
                 |> Success
             
+            | KIfStmtEvalGuard (stmt, conditions, k) -> 
+                let evaluatedGuard = KResult value
+                let newCondition = ConditionalStmt (evaluatedGuard, stmt)
+                let newListOfConditions = newCondition::conditions
+                let pgm' = InternalCmd (IfStmt newListOfConditions)
+                { state with 
+                    pgmFragment = pgm' 
+                    kont = k }
+                |> Success
+
+            //| KBlockStmt k -> 
+            //    state |> Success
+
             | _ -> Failure (state, "Kontinuation not supported: " 
                                    + state.kont.ToString())
         | _ -> Failure (state, "Attempt to apply a Kontinuation, 
@@ -188,6 +207,7 @@ module Execution =
         
         | Stmt s -> 
             match s with
+            
             // --- Expression Stmt 
             | :? Ast.ExpressionStmt as s -> 
                 let exp = s.Expression
@@ -195,15 +215,31 @@ module Execution =
                     pgmFragment = Expr exp
                     kont = ExprStmtK state.kont }
                 |> Success
+            
             // --- EmptyStmt
             | :? Ast.EmptyStmt ->
                 { state with pgmFragment = KResult Void }
                 |> Success
+
+            // --- BlockStmt
+            //| :? Ast.BlockStmt as b ->
+            //    let stmtList = PgmFragment.StmtList (Array.toList b.Statements) 
+            //    let pgm' = stmtList
+            //    let kont' = KBlockStmt state.kont
+            //    { state with 
+            //        pgmFragment = pgm'
+            //        kont = kont'}
+            //    |> Success
+
             // --- IfStmt
             | :? Ast.IfStmt as s -> 
-                let conditions = Seq.toList s.Conditions
-                let cmd = InternalCmd (IfStmt conditions)
-                { state with pgmFragment = cmd } |> Success
+                let conditions = 
+                    s.Conditions
+                    |> Seq.toList
+                    |> List.map (fun c -> InternalCmd.ConditionalStmt (Expr c.Condition, Stmt c.Statement))
+                let pgm' = InternalCmd (IfStmt conditions)
+                { state with pgmFragment = pgm' } |> Success
+
             // --- Unsupported 
             | _ -> Failure (state, "Unsupported statement: " + s.ToString())
         
@@ -344,11 +380,26 @@ module Execution =
             | IfStmt [] -> 
                 { state with pgmFragment = KResult Void } |> Success
 
-            //| IfStmt (h::T) -> 
-                
-            //    let condition = h. Condition
-            //    { state with pgmFragment = InternalCmd (IfStmt T) } |> Success
+            | IfStmt (ConditionalStmt(cond, stmt)::T) when not (isKResult cond) -> 
+                let pgm' = cond
+                let kont' = KIfStmtEvalGuard (stmt, T, state.kont)
+                { state with 
+                    pgmFragment = pgm'
+                    kont = kont'} |> Success
 
+            | IfStmt (ConditionalStmt(KResult (PhpValue (Bool true)), stmt)::_) -> 
+                let pgm' = stmt
+                { state with pgmFragment = pgm'} |> Success
+
+            | IfStmt (ConditionalStmt(KResult (PhpValue (Bool false)), _)::T) -> 
+                let pgm' = InternalCmd (IfStmt T)
+                { state with pgmFragment = pgm'} |> Success
+
+            // TODO
+            //| IfStmt (ConditionalStmt(Expr null, stmt)::T) -> 
+            //    let foo = ConditionalStmt(KResult (PhpValue (Bool true)), stmt)
+            //    let pgm' = InternalCmd (IfStmt T)
+            //    { state with pgmFragment = pgm'} |> Success
             //--- ARRAY ACCESS 
 
             // array-access-strict-LHS

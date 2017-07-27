@@ -24,7 +24,7 @@ let ast = Parsing.parseFile file
 
 // How to get a constant name...
 //((((ast.[0] :?> Syntax.Ast.ExpressionStmt).Expression :?> Syntax.Ast.ValueAssignEx).RValue :?> Syntax.Ast.GlobalConstUse).Name).Name.Value
-((((ast.[0] :?> Syntax.Ast.ExpressionStmt).Expression :?> Syntax.Ast.ValueAssignEx).RValue :?> Syntax.Ast.GlobalConstUse).Name)
+//((((ast.[0] :?> Syntax.Ast.ExpressionStmt).Expression :?> Syntax.Ast.ValueAssignEx).RValue :?> Syntax.Ast.GlobalConstUse).Name)
 
 (* And this is how to execute it *)
 

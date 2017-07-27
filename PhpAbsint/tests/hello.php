@@ -10,6 +10,22 @@
 	}
 */
 
-	$x = true;
-	$y = false;
+	if (false)
+	{
+		$x = 3;
+	}
+	elseif (false)
+	{
+		$y = "hello";
+	}
+	elseif(true)
+	{
+		$z = "wow";
+	}
+	elseif(true)
+	{
+		$q = "boo";
+	}
+
+	$lolo = 1223;
 ?>
