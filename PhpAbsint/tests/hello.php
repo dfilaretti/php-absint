@@ -1,6 +1,6 @@
 <?php
-/*
-	if (3 ==4)
+
+	if (false)
 	{
 		$x = 1;
 	}
@@ -8,13 +8,16 @@
 	{
 		$z = 99;
 	}
-*/
+
+
+
+/*
 
 	if (false)
 	{
 		$x = 3;
 	}
-	elseif (false)
+	elseif (true)
 	{
 		$y = "hello";
 	}
@@ -27,5 +30,9 @@
 		$q = "boo";
 	}
 
-	$lolo = 1223;
+*/
+	
+
+	//$lolo = 1223;
+	//$x = "hjk";
 ?>

@@ -44,11 +44,12 @@ type Kont =
     // Halt
     | HaltK
 
+
 type State = 
     { pgmFragment : PgmFragment
       crntScope : int
       heap : Heap
-      kont : Kont }
+      kont : Kont } // TODO: use Option<Kont>
 
 // TODO: use F# 4.1 builtins! 
 type Result<'TSuccess, 'TFailure> = 
@@ -198,7 +199,7 @@ module Execution =
         match state.pgmFragment with 
         | StmtList ss ->
             match ss with 
-            | [] -> Success state
+            | [] -> Success {state with pgmFragment = KResult Void}
             | s::pgm -> 
                 { state with 
                     pgmFragment = Stmt s 
@@ -222,14 +223,12 @@ module Execution =
                 |> Success
 
             // --- BlockStmt
-            //| :? Ast.BlockStmt as b ->
-            //    let stmtList = PgmFragment.StmtList (Array.toList b.Statements) 
-            //    let pgm' = stmtList
-            //    let kont' = KBlockStmt state.kont
-            //    { state with 
-            //        pgmFragment = pgm'
-            //        kont = kont'}
-            //    |> Success
+            | :? Ast.BlockStmt as b ->
+                let stmtList = PgmFragment.StmtList (Array.toList b.Statements) 
+                let pgm' = stmtList
+                { state with 
+                    pgmFragment = pgm' }
+                |> Success
 
             // --- IfStmt
             | :? Ast.IfStmt as s -> 
@@ -395,12 +394,13 @@ module Execution =
                 let pgm' = InternalCmd (IfStmt T)
                 { state with pgmFragment = pgm'} |> Success
 
-            // TODO
-            //| IfStmt (ConditionalStmt(Expr null, stmt)::T) -> 
-            //    let foo = ConditionalStmt(KResult (PhpValue (Bool true)), stmt)
-            //    let pgm' = InternalCmd (IfStmt T)
-            //    { state with pgmFragment = pgm'} |> Success
-            //--- ARRAY ACCESS 
+            // FIXME
+            | IfStmt (ConditionalStmt(Expr null, stmt)::T) -> 
+                let foo = ConditionalStmt(KResult (PhpValue (Bool true)), stmt)
+                let pgm' = InternalCmd (IfStmt T)
+                { state with pgmFragment = pgm'} |> Success
+           
+           //--- ARRAY ACCESS 
 
             // array-access-strict-LHS
             | ItemUse (l, r) when not (isKResult l) -> 
@@ -471,7 +471,7 @@ module Execution =
         match state with
         | Success s -> 
             match s.pgmFragment with 
-            | StmtList [] -> state
+            | KResult Void when s.kont = HaltK -> state
             | _ -> step' (step s)  
         | Failure (s, errorMsg) -> Failure (s, "Interpreter could't finish execution: " + errorMsg)
 
