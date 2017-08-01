@@ -1,6 +1,6 @@
 # PhpAbsint
 
-This aims to be a complete rewrite of KPHP and KPHP#, using F# (and the .NET framework, of which F# is part).
+This aims to be a complete rewrite of KPHP and KPHP#, using F# and the .NET framework.
 
 Before using F#, we used Racket. It has been rewritten a few times! 
 
@@ -16,7 +16,25 @@ This comes basically "for free" after having defined `KphpLib.fs`.
 The focus now is mainly on getting the architecture right.  
 From the experiments so far, it seems everything translates pretty well from `KPHP` to F#! :)
 
-## Setting up a development environment
+## Notes/Info
+
+### Why F#?
+
+F# is a language in the ML family (similar to OCAML) which is driven by both open source
+community and Microsoft. It is a .NET language, meaning it targets Microsoft CLI (Common
+Language Runtime) in the same way as e.g. C# and VB does. This also means the whole .NET
+libraries and ecosystem are available to F# programs.
+
+### Parsing
+
+We use a PHP parser from https://www.devsense.com/ The parser is written in C# but can be
+accessed via F# (as they both target the underlying intermediate language).
+It seems to be fully featured (error management, full  line number info etc.) although
+I haven't explored all of this in detail.
+
+## Setting up a development environment (DEPRECATED!)
+
+## NOTE: things have changed since this section have been written. The project now opens out of the box in Visual Studio! Should figure out how to make a bit more cross-platform (e.g. .NET Core + Ionide??).  ##
 
 You can either follow the traditional route of installing everything you need on your computer or use the Vagrant virtual machine provided. See next subsections for details. 
 
@@ -117,18 +135,3 @@ I need to investigate more but I don't think this will wotrk righ now. A quick s
 
   
 
-## Notes/Info
-
-### Why F#?
-
-F# is a language in the ML family (similar to OCAML) which is driven by both open source
-community and Microsoft. It is a .NET language, meaning it targets Microsoft CLI (Common
-Language Runtime) in the same way as e.g. C# and VB does. This also means the whole .NET
-libraries and ecosystem are available to F# programs.
-
-### Parsing
-
-We use a PHP parser from https://www.devsense.com/ The parser is written in C# but can be
-accessed via F# (as they both target the underlying intermediate language).
-It seems to be fully featured (error management, full  line number info etc.) although
-I haven't explored all of this in detail.
