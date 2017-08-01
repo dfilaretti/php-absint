@@ -32,9 +32,7 @@ accessed via F# (as they both target the underlying intermediate language).
 It seems to be fully featured (error management, full  line number info etc.) although
 I haven't explored all of this in detail.
 
-## Setting up a development environment (DEPRECATED!)
-
-## NOTE: things have changed since this section have been written. The project now opens out of the box in Visual Studio! Should figure out how to make a bit more cross-platform (e.g. .NET Core + Ionide??).  ##
+## Setting up a development environment -- DEPRECATED!!! -> things have changed since this section have been written. The project now opens out of the box in Visual Studio! Should figure out how to make a bit more cross-platform (e.g. .NET Core + Ionide??).  ##
 
 You can either follow the traditional route of installing everything you need on your computer or use the Vagrant virtual machine provided. See next subsections for details. 
 
