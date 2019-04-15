@@ -4,6 +4,12 @@ This aims to be a complete rewrite of KPHP and KPHP#, using F# and the .NET fram
 
 Before using F#, we used Racket. It has been rewritten a few times! 
 
+For the original KPHP, see:
+
+* [GitHub repo](https://github.com/dfilaretti/KPHP)
+* [PhD Thesis](http://danielefilaretti.com/assets/downloads/papers/Filaretti-D-PhD-2016.pdf)
+* [Project Website](http://phpsemantics.org/) (old!) 
+
 ## Current Status
 
 At the moment, we model pretty much everything that used to be in `memory.k` in the old `KPHP` (in what now is `KphpLib.fs`)
